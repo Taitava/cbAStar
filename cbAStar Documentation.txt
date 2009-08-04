@@ -1,0 +1,815 @@
+
+        B         AA      SSSS     T             R
+  CCC   B        A  A    S       TTTTT    AAAA   R RR
+ C      BBBB    AAAAAA    SSS      T     A   A   RR
+ C      B   B   A    A       S     T     A  AA   R
+  CCC   BBBB    A    A   SSSS      T      AA A   R
+ +--------------------------------------------------+
+ |         cbAStar version 1.0 2009-08-04           |
+ |        Made By Jarkko 'Jare' Linnanvirta         |
+ +--------------------------------------------------+
+ 
+----------------------
+DOCUMENTATION CONTENTS
+----------------------
+1. Introduction to cbAStar
+	- The algorithm
+2. Guide to calculate a path
+	- The Pathfinding Rules
+	- Include cbAStar into a project
+	- Initialize cbAStar with a tilemap
+	- Initialize cbAStar with other map format
+	- Calculating a path
+3. Guide to follow a path
+	- A note about multiple objects using the same path
+4. Advanced features
+	- Use single node penalty
+	- Use node direction penalty
+	- Use move direction penalty
+	- Negative penalty
+	- Configuring advanced rules
+5. The complete function reference
+6. Author and license
+^^^^^^^^^^^^^^^^^^^^^^
+
+
+--------------------------
+1. INTRODUCTION TO CBASTAR
+--------------------------
+
+Hello, folks!
+
+cbAStar is a function library written in CoolBasic which provides you an easy way to produce your game the intelligence to generate paths on a playground from point A to point B. As it stands in the library's name, cbAStar is based on the popular A* (A Star) pathfind algorithm.
+
+With cbAStar, you can for example:
+* Implement a pathfinding system into a 2D game that is viewed from the side or from the top.
+* Implement a pathfinding system to a Tilemap based playfield engine - or to your own made engine.
+* Calculate a path step by step without interrupting the whole program.
+* Avoid paths that would give problems to character due to gravity, enemy influence, slow moving speed or any other reason.
+* Use advanced map configuration to guide which general directions your characters should go - and which directions they should not go - on a specific places on your playfield.
+* Calculate paths for board game peaces.
+
+Even though cbAStar is called as a 'library', it does not contain any DLL files or other external libraries. The whole library is written in pure CoolBasic code and therefore can be easily kept with any project and does not require skills in other programming languages in order to be modified. Yes, every user is allowed to modify the library, but please see the chapter Author and license for more details.
+
+
+The algorithm
+-------------
+
+I learned the A* algorithm at the same time I developed this library. I studied a great article of the algorithm written by Patrick Lester. So many thanks to him for writing the article. Here is an address to it:
+
+http://www.policyalmanac.org/games/aStarTutorial.htm
+
+(The address was checked 2009-08-04)
+
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+
+----------------------------
+2. GUIDE TO CALCULATE A PATH
+----------------------------
+
+To get started with cbAStar, you need to have the following programs downloaded and installed onto your computer:
+* CoolBasic (version Beta 10.43 (aka CoolBasic Classic). A newer version (if available) is not suitable!)
+	- This includes:
+	- CoolBasic Compiler
+	- CoolBasic IDE (Code Editor and Manual)
+	- Can be downloaded from: http://www.coolbasic.com (free of charge)
+* cbAStar library (version 1.0. A newer version (if available) has it's own documentation, so please check that the version number of this documentation is the same as the version number of your cbAStar source code!)
+	- This includes:
+	- cbAStar source code
+	- cbAStar documentation (probably the same file you are currently reading)
+	- Can be downloaded from: http://cbkk.systec.fi (site in Finnish) OR from http://www.coolbasic.com/phpBB3/ (from the English Projects area). (Free of charge).
+	
+I quess you probably have the cbAStar already because you are reading its documentation. And you should also have CoolBasic since you have been interested in downloading CoolBasic source code.
+
+There is no need for any other libraries.
+
+
+The Pathfinding Rules
+---------------------
+
+The first thing to do is to open a file named cbAStar.cb from cbAStar's directory in your CoolBasic Editor. In the beginning of the file you see a list of pathfinding rules. With the rules you can configure how the library tries to produce a path. Some of the rules are marked as Advanced Rules and you don't have to use them right now. See chapter Advanced Features for more information about them.
+
+Take a look at the following rules and configure them as you want. Each rule can be set to 1 (=ON) or 0 (=OFF).
+	* A) Accept Collide Wall Corners,
+		- If ON, a path may move diagonally so that an obstacle node's corner will touch the path.
+	* B) Move Between Wall Corners,
+		- If ON, a path may move diagonally between two obstacles that are adjacent to each other by their corners.
+		- You are not allowed to set this rule ON, if Rule A if OFF!
+	* C) Move Horizontally,
+		- If ON, allow the path to move along the x axis.
+		- Do not set all of these three rules OFF: C, D and E!
+	* D) Move Vertically,
+		- If ON, allow the path to move along the y axis.
+		- Do not set all of these three rules OFF: C, D and E!
+	* E) Move Diagonally AND
+		- If ON, allow the path to move along the x and y axis at the same time.
+		- Do not set all of these three rules OFF: C, D and E!
+		- Can be ON even if C and D are OFF.
+	* I) Use Turn Penalty
+		- If ON, a node that is candidate to become a part of a path will have penalty if it turns off the path's current direction. The algorithm tries to select a node that has low penalty or no penalty at all.
+		- The given penalty can be configured in the beginning of cbAStar.cb file, after the rules list.
+
+
+Include cbAStar Into A Project
+------------------------------
+
+After configuring the rules you are ready to implement the library into your project. If you do not have a suitable project for implementing the library at this point, please read still the implementation instructions here. After learning how the implementation is done, you can see the attached example programs and explore how the library is implemented in the examples.
+
+To include the cbAStar library into your project's compilation process, write the following code at the begining of the project's source code:
+
+> Include "cbAStar.cb"
+
+If the cbAStar.cb file is located elsewhere than where your project's source code is located, apply the correct path of the cbAStar.cb file to the Include command. After typing the command, press F4 to ensure that the library's compilation goes well. This is a critical point! The library may use same global names (for functions, global variables, constants or types) that are used in your project. In that case, the compilation will fail causing an error message. If this happens, you need to go through either the library's or your project's source code and change the global names that are mentioned in error messages given by the CoolBasic Compiler. Be careful and check that you change all names that are depending on the structure that you have already renamed.
+
+If you have problems that you are not able to solve at this point, please see the cbAStar topic in CoolBasic forum's English section. If you do not find an answer there, please post a description of your problem there. Or you can send me PM on the forums or send me email, but please check out the cbAStar's topic before sending questions.
+
+If the compilation went well, go to the section of your project where the actual game begins and a map is loaded. A map can be in the Tilemap format or in your own made format. If you use the tilemap format in your project, please goto read the chapter Initialize cbAStar With A Tilemap. Otherwise goto read the chapter Initialize cbAStar With Other Map Format. After these chapters the instructions continues the same way without depending on if you are using tilemaps or not.
+
+
+Initialize cbAStar With A Tilemap
+--------------------------------
+
+In your project's source code, find the code line where a tilemap is loaded. Insert the following statement somewhere AFTER the line that loads the tilemap:
+
+> cbAStarInitializeUsingTilemap()
+
+After inserting this line, press F4 to launch the compilation process which will check that there is no errors. If the compilation process throws an error, try to find a solution for it. If you cannot get rid of the problem, please refer to the cbAStar's topic in the CoolBasic Forums.
+
+If the compilation goes well, the initialization is done. The initialization function does the following for us:
+* Redim cbAStar's map array to cover the current tilemap.
+* Copy the tilemap's hit level to the map array's obstacle level.
+
+Therefore the library is ready to take orders to calculate paths. You can now skip the following chapter (named Initialize cbAStar With Other Map Format) and continue reading from chapter Calculating a path. However, if you want to learn more about cbAStar's obstacles and how they are defined, reading the next chapter will give you useful information.
+
+
+Initialize cbAStar With Other Map Format
+-----------------------------------------
+
+In your project's source code, find the location where a map is loaded or generated. Put the following function call AFTER the code that loads or generates the map:
+
+> cbAStarInitialize(map_width, map_height)
+
+Parameters map_width and map_height state the map's dimensions measured in nodes. In general, you need a map that can somehow be diveded into rectangles. If your map is already in the form of an array, you can use the array's width and height here as parameters. If your map is for example in the form of an image, you need to decide how many nodes it will be divided into by horizontally and vertically. The term 'node' can actually mean also the same as the terms 'rectangle' or 'square'. 
+
+Well then. How tall and how wide is one node in pixels? This is a thing that you decide your self, BUT you do not ever need to pass that information to cbAStar. That's because there is no need for the library to know any measurements related to drawing graphics on the screen or moving objects in the game world. The library just calculates routes in a relative sized array, which causes that the library's basic functionality always takes coordinates and measurements in nodes and always returns them in nodes. 
+
+The next thing to do now is to configure the cbAStar's map's obstacle floor. This is a very freeform operation that needs you to somehow scan through your map and indicate the nodes that have such obstacles that must always be avoided when calculating a path. The following function can be used to define obstacle nodes in cbAStar:
+
+> SetAStarObstacle(node_x,node_y, [is_obstacle=ON])
+
+This function sets the node pointed by node_x and node_y to be treated like an obstacle. The optional parameter can be set to False if you want to cancel an obstacle definition. The cancellation may become handy if the game's map changes in some situations. But the normal use of this function is to add obstacles.
+
+If your map is for example in the form of an image, you need to scan through the map image and read pixels from it in certain locations that you must conclude to be rational. This way you can read obstacles from the image.
+
+SetAStarObstacle() is a good choice if you are scanning your map in a double For...Next loop and reading the map one node at a time. But there are also two extra functions that may become handy in certain circumstances:
+
+> SetAStarObstacleLine(node1_x,node1_y, node2_x,node2_y, [is_obstacle=ON])
+
+This function works like CoolBasic's inbuild drawing command named Line. It takes an obstacle line's starting and ending coordinates as parameters and then sets the whole line to the cbAStar's map. This is handy if you know the starting and eding points of a wall in your game's map. Then you can just pass the whole wall to the library in one function call! And as like the previous function, this function can be used to erase obstacles from cbAStar's map by setting the optional parameter to OFF.
+
+> SetAStarObstacleBox(node_x,node_y, width, height, [filled=OFF], [is_obstacle=ON])
+
+This function is meant to define big obstacle areas that are in the form of rectangle. It has two modes: it can fill the whole area with obstacles or just define the area's borders to be obstacles. The second mode is the function's default behaviour and is handy when you are defining for example a house that is in a shape of rectangle. Just use this function and after that use SetAStarObstacle to unset obstacle in the location of the house's door. Or use this function with the filling mode ON to define unwalkable terrain such as sea, mountain or gorge. The function's four first parameters are the same as in CoolBasic's inbuild drawing command named Box: first a rectangle's upper left corner and then the rectangle's dimensions. After that you can optionally enter whether you want the rectangle to be filled or not and should the function place or remove obstacles.
+
+After scanning through the game's map and indicating all necessary obstacles, the library is set up correctly.
+
+
+Calculating a Path
+------------------
+
+Locate a place in your game's source code where an object needs to find a path to it's destination. Then calculate the path with the following function:
+
+> CalculatePath(start_node_x,start_node_y, end_node_x,end_node_y, [one_node_at_time=OFF])
+
+This function's only required parameters are coordinates to nodes that start and end the path. With this information the function calculates a suitable path from the start to the end. The function's default behaviour is to calculate the whole path upon one call. This way is suitable for most situations and is very easy to take control of.
+
+However, when talking about performance, cbAStar has a special feature to be considered in circumstances where a lot of power is needed to share with many processes at the same time and not only with path calculation. By setting the optional parameter ON, CalculatePath() only calculates one node of the path upon a call. The calculated node may or may not be one of the nodes in the final resulting path. This is why the function won't return parts of a path before the whole path is calculated. After calculating one node, the calculation will continue when the function is called again.
+
+When using the One Node at a Time mode (ONT mode), The starting and ending nodes' coordinates must be passed as parameters when the pathfinding starts. Next times you will also need to pass the applicable parameters - but it does not anymore matter what values they have. When called again in the ONT mode, the function ignores all parameters and continues the earlier started calculation. The thing that you must really be careful with is that if you have multiple objects that need to have calculated paths, you can only calculate ONE PATH AT A TIME! When in ONT mode, there is no way to first calculate a little bit of one path and then a little bit of another. You need to go through one calculation process before starting a new one. There is no way to cancel a process.
+
+What if the ONT mode is used on first few times when a path is calculated, but then set to OFF? This is a rare behaviour that maybe has no advantageous reason. But anyway, the result will be fine. The rest of the path is calculated upon the call that sets the ONT mode OFF.
+
+Whether you are using the ONT mode or not, you need to pay attention to the function's return values and ensure that you treat them correctly:
+* A positive integer is returned when a path calculation is done successfully. The returned integer is a pointer to a MemBlock containing the calculated path. We will go into this more closely later.
+* A zero (0) is returned if the ONT mode is ON and the path calculation is not yet finished.
+* A negative one (-1) is returned if a path between the given coordinates cannot be formed due to obstacles that are impossible to circulate.
+
+To find out if the return value was a pointer to a MemBlock containing a path, you need to use the following If statement in order to do the verification correctly:
+
+> path = CalculatePath(2,3, 8,7)
+> If path > 0 Then 'Correct
+>	...
+
+The following way to do the verification is WRONG:
+
+> path = CalculatePath(2,3, 8,7)
+> If path Then 'Incorrect
+>	... 
+
+The problem in the last condition is that it will have a value of True even if the return value is -1. That's because in CoolBasic all values except 0 (zero) are treated as True. This is why you need to exclude the possibility of the return value to be -1.
+
+To calculate a path using the ONT mode, you can use for example the following expedient:
+
+> Dim enemy_path 'This variable will hold a pointer to a MemBlock containing a calculated path when the calculation is complete.
+> Repeat 'Game Main Loop starts
+>	... 'Some game engine code here
+> 	If enemy_path < 1 Then
+>		'Enemy does not have a path to player
+>		path = CalculatePath(enemy_node_x,enemy_node_y, player_node_x,player_node_y, ON) 'Remember to set the last parameter to ON in order to enable the ONT mode!
+>		If path > 0 Then
+>			'A path has just been found
+>			enemy_path = path
+>		EndIf
+>	EndIf
+>	... 'Some more game engine code here
+> Forever
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+
+-------------------------
+3. GUIDE TO FOLLOW A PATH
+-------------------------
+
+Now that you have got your game to the point that it can retrieve calculated paths from the library, you should notice that the main base of the library has actually done it's work and the next steps does not belong to the main part of the library. This is because when deciding plans about a programming project, limits have to be drawn somewhere not too far away from the marrow point of what for the project was originally started to be made for. However, the library would be useless without any written documentation on how to read the calculated paths. To make the library's interface more easier to approach, there is also a few functions that can be optionally used to follow and handle the resulting final paths.
+
+A path is stored in a MemBlock. And just for you to know: actually in that form, a path is not anymore part of the standard A* algotrithm since the algorithm does not take a stance on how the resulting path should actually be stored or presented. As was said before, the cbAStar library is designed so that its main purpose is to do the path calculation - not to actually present the resulting path in any way or to make an object to follow the path. The library just returns the path in a MemBlock.
+
+To be able to read the given path, you need to know its format. The format is very simple: All path nodes are stored to the MemBlock in a queue. Each node has only two attributes stored in the MemBlock: X coordinate and Y coordinate. Both are in data type of a Short Integer. After these two values either begins another node OR the MemBlock ends meaning that the path ends also.
+
+To read the path, you can write your source code based on this example:
+> path		= CalculatePath(2,3, 8,7)
+> path_size	= MemBlockSize(path)
+> For i = 0 To path_size-4 Step 4
+>	node_x = PeekShort(path, i)
+>	node_y = PeekShort(path, i+2)
+> Next i
+
+This can sound confusing, but please read this documentation ahead. There is another way to do this for those who prefer to get this done easier or does not have learned how to use MemBlocks.
+
+A secondary purpose of this library is to give a little bit easier way to read a path returned by the library. There is a function called FollowPath() which takes a path MemBlock as a parameter. The function returns coordinates of the next node of the given path in global variables FollowPathX and FollowPathY. To keep track on which node are we currently going on, the function also makes a little modification to the path's MemBlock: it resizes it and stores at the end of the MemBlock an index of the current node.
+
+You need to consider the modification made by this function, but you do not need to worry about it. If you use FollowPath() and some of your own made code that goes through the same path MemBlock in a For...Next loop described above, you should be aware that the path's MemBlock in the For...Next loop may also contain an index value written by FollowPath(). Well, usually this is not a problem because the index value is a Short Integer so it increases the MemBlock's size by two bytes. The For...Next loop stated above will never read the index because after reading all of the path's nodes, it actually jumps over the index value and ends the loop without ever reading the index value. So the index value should not ever disturb any process that reads node coordinates from a path's MemBlock.
+
+But if you for some reason use a For...Next loop with any other Step value than 4, it may be possible for the index value to appear into the For...Next loop. This is why it is strongly recommended to always use a Step value of 4 when reading nodes from a path's MemBlock. This is mentioned just for that you know that if you will ever come up with a strange value coming from the end of some path's MemBlock, you know that it's just an index value written there by FollowPath().
+
+
+A Note About Multiple Objects Using A Same Path
+-----------------------------------------------
+
+If you are using FollowPath() to read paths, you should always make every object to keep an own copy of their path. If the objects are in different positions on the same path AND are using actually the same path MemBlock, it will confuse FollowPath() and produce chaos. Therefore use CloneMemBlock command to create a unique copy of a path to each object that uses the path. CloneMemBlock command can also be used in any other situations too - and it does not break anything inside the cbAStar library.
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+
+--------------------
+4. ADVANCED FEATURES
+--------------------
+
+While cbAStar should produce paths that look good in theory, there may be a number of matters that makes it so that a shortest way is not always the best way. In your game there may be for example the following elements that restricks movements:
+	* Gravity: A side viewed game has platforms which means that moving from a lower platform to an upper platform will require that vertical movement through open air (by jumping) is avoided as much as possible. Also in some cases when moving from an upper platform to a lower platform, large drops must be avoided in order to conserve the moving obstact's life.
+	* Hills: Moving uphill is much slower than moving downhill. That's why paths should prefer downhills and avoid uphills.
+	* Terrain with limited speed: A path should circulate areas that limit the object's speed too much. In the other hand, if the circulation would be very large compared to the trip that would be travelled through a limited speed terrain, the path should still take a shortcut through the terrain.
+	* Enemy influence: If a group of enemies is guarding a portion of a desired path's travelling area, the area should be circulated in order to make a safe journey.
+
+There are probably a lot more situations where a pathfinding algorithm should not take the shortest way. The simpliest way to avoid the issues stated above would be to define the involved nodes as obstacles. But that would only lead the pathfinding algorithm into other problems and raise the change of impossible paths dramatically.
+
+In cbAStar, there are three Advanced Rules that can be used to manage quite a mass of cases like the ones stated above. Using any of the rules reserves more system memory, which is why the rules are not used by default. In order to use the rules, you must open cbAStar.cb file into the CoolBasic's editor and apply the rules from the beginning of the file. They can be found easily through inline comments.
+
+The Advanced Rules are:
+	* Use Single Node Penalty
+	* Use Node Direction Penalty
+	* Use Move Direction Penalty
+
+In the next chapters we will consider what each of the rules do. The actual instructions to use each of the rules is presented afterwards in chapter Configuring advanced rules.
+
+
+Use single node penalty
+-----------------------
+
+Each node can be given a simple penalty. The pathfinding algorithm will prevent using the node if its penalty is too high in relation with adjacent nodes. The penalty can be given for any reason - for example an enemy influence. 
+
+
+Use node direction penalty
+--------------------------
+
+While a node can have all-round penalty (as stated in the previous chapter), there is a way to define a more conditional penalty. A node can be given extra penalty if it is in a special direction when coming from a path's previous node.
+
+The direction can be measured by integer numbers from 0 to 7. The directions are:
+	* 0: Direction to east
+	* 1: Direction to north east
+	* 2: Direction to north
+	* 3: Direction to north west
+	* 4: Direction to west
+	* 5: Direction to south west
+	* 6: Direction to south
+	* 7: Direction to south east
+	
+The direction format may sound confusing, but it has a logic if you compare it to your keyboard's numpad: direction 0 is the key Num6, direction 1 is the key Num9 and next directions goes counter-clockwise. Why not use a degree or radian based direction? Because that would give too much direction that could not be treated separately. When looking from the aspect of nodes, one node can have eight neighbours, which is the base idea for node directions.
+
+A node can hold information about penalty of one direction (the direction value and the penalty amount). Multiple directions per node cannot be defined.
+
+A direction based penalty will make the pathfinding algorithm to avoid approaching the intended node if it's in a certain direction. However, moving into the node is not avoided when the node is in other direction related to a previous node.
+
+IMPORTANT NOTE! In order to use Node Direction Penalty, the rule Single Node Penalty must be set ON too! Otherwise the library's memory handler will fail causing Memory Access Violation error message at some stage of a compiled program.
+
+
+Use move direction penalty
+--------------------------
+
+This rule is like the one above, but much simplier. You can give penalty separately to all of the directions you want - and the penalty is applied everytime when the pathfinding algorithm tries to make a path move towards any of the intended directions. The penalty amount may even differ between the directions!
+
+
+Negative penalty
+----------------
+
+Data type of a penalty amount is always integer. Based on this point, you can also give negative penalty. This way you can make the pathfinding algorithm to prefer certain nodes or directions. This is a very good way to produce roads that are more easier to move on than their environment. This affects to the performance also: it makes much less load for the CPU if you give negative penalty to a road than if you scan through all of the road's environment giving non-road nodes positive penalty.
+
+
+Configuring advanced rules
+--------------------------
+
+Move direction penalty has a constant effect and it is configured only by setting the rule on and giving each direction a penalty value in cbAStar.cb source code file's configuration part.
+
+Rules Single Node Penalty and Node Direction Penalty can be enabled in the cbAStar.cb source code file. Configuring the rules goes through your implementation by using mainly a function named SetAStarPenalty(). Statement of the function is as follows:
+
+> SetAStarPenalty(node_x,node_y, single_node_penalty, single_node_penalty_direction, single_node_penalty_direction_amount)
+
+Parameters of the function:
+	* X and Y coordinates define a node whose penalties will be changed.
+	* single_node_penalty: Set penalty amount that the node will give to the path if the pathfinding algorithm selects the node into a path.
+	* single_node_penalty_direction: Penalty direction to be set to the node. If the algorithm selects this node into a path and the path comes to this node in this direction, the path will have extra penalty defined in the next parameter.
+	* single_node_penalty_direction_amount: Relating to the previous parameter, this parameter sets the amount of the penalty.
+	
+The function does not return any values. Use the function to define all nodes that you wish to apply any penalties.
+
+If you want to skip some of the penalty parameters, leave them unset and their values in the node wont be changed. The same behaviour can be achieved if you use a constant named CBASTAR_DEFAULT in the penalty parameters that you do not wish to change.
+
+You should also refer The Function Reference for functions called SetAStarPenaltyBox() and SetAStarPenaltyLine(). Those functions work the same way as SetAStarPenalty(), but they can define multiple nodes with the same penalties at the same time.
+
+Now you know all the advanced features. With them you are able to produce a very versatile pathfinder for your game's artificial intelligence. The system is open for wide use.
+^^^^^^^^^^^^^^^^^^^^
+
+
+----------------------------------
+5. THE COMPLETE FUNCTION REFERENCE
+----------------------------------
+
+This chaper contais all functions defined in the cbAStar library. Functions can have the following markings:
+* [MF] - (Main Function) This function belongs to the main part of the library meaning that you are probably going to need to call this function.
+* [OF] - (Optional Function) This function belongs to the optinal part of the library meaning that it does side tasks that are not required in all implementations. This does not mean that it can be left out from the compilation process since the library itself may need it.
+* [IL] - (Inside Library) Function is meant to be used only inside the library - using it in your implementation is not recommended!
+* [RC] - (Required to Call) This function is needed to be called atleast once for the library to work correctly.
+* [RC*]- Same as [RC], but can be replaced with another function marked with [RC*].
+* [AU] - (for Advanced Use only) This function is needed only if used The Advanced Rules of the library.
+
+List of all functions (excluding [IL] functions):
+-------------------------------------------------
+CalculatePath()					[MF] [RC]
+cbAStarInitialize()				[MF] [RC*]
+cbAStarInitializeUsingTilemap()	[MF] [RC*]
+CoordinateChangeToDirection()	[OF] [AU]
+DirectionToCoordinateChange()	[OF] [AU]
+FollowPath()					[OF]
+GetAStarObstacle()				[OF]
+GetAStarPenalty()				[OF] [AU]
+LoadAStarMap()					[OF]
+ResetFollowPath()				[OF]
+ReversePath()					[OF]
+SaveAStarMap()					[OF]
+SetAStarObstacle()				[MF]
+SetAStarObstacleLine()			[MF]
+SetAStarObstacleBox()			[MF]
+SetAStarPenalty()				[OF] [AU]
+SetAStarPenaltyLine()			[OF] [AU]
+SetAStarPenaltyBox()			[OF] [AU]
+
+List of [IL] functions:
+-----------------------
+AddNodeToClosedList()
+AddNodeToOpenList()
+CalculateGCost()
+CalculateHCost()
+CheckAdjacentNodes()
+CheckIfNodeCouldGetBetterParent()
+CreateNode()
+FindNodeWithLowestPathScore()
+GatherPath()
+IsOpenListEmpty()
+IsWallBetweenNodes()
+RemoveNodeFromOpenList()
+ResetPath()
+
+
+Function manuals:
+-----------------
+
+IL functions does not yet have documentation. If you need them, see their comments in the cbAStar.cb file.
+
+CalculatePath() [MF] [RC]
+-------------------------
+
+Statement: path = CalculatePath(start_x,start_y, end_x,end_y, [mode=OFF])
+
+Parameters:
+	* start_x,	start_y:	Coordinates from where the pathfinding should start.
+	* end_x,	end_y:		Coordinates to where the pathfinding should get.
+	* [mode=OFF]:			If OFF, the whole path will be calculated at once. If ON, only one node of the path will be calculated and the calculation will be continued next time.
+	
+Return values:
+	* Positive Integer:		A pointer to a MemBlock containing the calculated map, OR
+	* 0 (Integer Zero):		Means that the calculation has not yet finished (only when mode parameter is 1).
+	* -1 (Negative One):	The calculation has ended without results because there is no path between the starting node and the ending node.
+	
+Description:
+This function does the actual path calculation.
+	
+Notes:
+All coordinates must be presented in node coordinate form - not in World coordinate form or Screen coordinate form! The node coordinate form is equal to tile coordinate form (if you are using tilemaps).
+
+When checking if the return value is a path, DO NOT USE THE FOLLOWING STATEMENT:
+
+> If path Then 'Wrong
+>	...
+	
+This is because the possible return value can also be -1, which equals to a true condition. Always use the following statement to correctly find out if the function has successfully calculated a path:
+
+> If path > 0 Then 'Right
+>	...
+
+
+cbAStarInitialize() [MF] [RC*]
+------------------------------
+
+Statement: cbAStarInitialize(map_width,map_height)
+
+Parameters:
+	* map_width, map_height:	dimensions of your playfield measured in nodes.
+	
+Return values:
+	* None
+
+Description:
+This function is needed to be called at an early stage for the library to work correctly. It resizes the library's own map array and therefore makes it possible to setup a map configuration and perform path calculations.
+
+Notes:
+If you are using tilemaps in your game, please use cbAStarInitializeUsingTilemap() instead of this function.
+
+This function can be used with tilemaps too, but the one stated above makes some additional tasks related to tilemaps so that it is more comfortable with tilemaps than this function.
+
+Use this function especially when you are using your own format for playfields.
+
+
+cbAStarInitializeUsingTilemap() [MF] [RC*]
+------------------------------------------
+
+Statement: cbAStarInitializeUsingTilemap()
+
+Parameters:
+	* None
+
+Return values:
+	* None
+
+Description:
+This function is needed to be called at an early stage for the library to work correctly. It resizes the library's own map array and therefore makes it possible to setup map configuration and perform path calculations.
+
+It takes the map's width and height value directly from a loaded tilemap so those values do not need to be passed as parameters. The function also scans the tilemap and copies it's obstacle floor to cbAStars own map array. In the other words: After calling this function, your tilemap is ready for path calculations.
+
+Notes:
+You need to have a tilemap loaded into your game before calling this function!
+
+
+CoordinateChangeToDirection() [OF] [AU]
+---------------------------------------
+
+Statement: direction = CoordinateChangeToDirection(x_change,y_change)
+
+Parameters:
+	* x_change:	change in a x coordinate. Actual value can be -1, 0 OR 1.
+	* y_change:	change in a y coordinate. Actual value can be -1, 0 OR 1.
+	
+Return values:
+	* A direction value from 0 to 7 (like in keyboard's numpad):
+		- 0: Direction to east
+		- 1: Direction to north east
+		- 2: Direction to north
+		- 3: Direction to north west
+		- 4: Direction to west
+		- 5: Direction to south west
+		- 6: Direction to south
+		- 7: Direction to south east
+
+Description:
+This function is used when giving direction based penalty to a node. This function returns the right direction number when it is correctly given coordinate changes that describe a direction.
+
+
+DirectionToCoordinateChange() [OF] [AU]
+---------------------------------------
+
+Statement:
+> x_change_and_y_change$ = DirectionToCoordinateChange(direction)
+> x_change = GetWord(x_change_and_y_change,1)
+> y_change = GetWord(x_change_and_y_change,2)
+
+Parameters:
+	* A direction value from 0 to 7. See function CoordinateChangeToDirection() for more information about the direction.
+
+Return values
+	* A string containing x_change and y_change separated by one space character ( " " ). Use GetWord() function to separate the values.
+	
+Description:
+Converts a direction value used in Node Direction Penalty to a relative coordinate change measured in X and Y axis.
+
+
+FollowPath() [OF]
+-----------------
+
+Statement: succeeded = FollowPath(path)
+
+Parameters:
+	* path:	A MemBlock containing a path that should be followed
+	
+Return values:
+	* True: Next node of the given path was succesfully read and its coordinates are written in the following global variables:
+		- FollowPathX
+		- FollowPathY
+	* False: The path has ended.
+	
+Description:
+Reads a next node from the given path and returns its coordinates. If the path has ended, returns False.
+
+Notes:
+The function makes a little modification to the MemBlock containing the path: the function increases the MemBlock's size by two bytes and stores there an index of a next node. You should consider this if you write code that reads paths directly from their MemBlocks.
+
+
+GetAStarObstacle() [OF]
+-----------------------
+
+Statement: is_obstacle = GetAStarObstacle(node_x,node_y)
+
+Parameters:
+	* X and Y coordinates for the node that should be viewed.
+	
+Return values:
+	* True or False depending if the given node contains an obstacle.
+	
+Description:
+This function can be used to check if a node has been defined as an obstacle or not.
+
+
+GetAStarPenalty() [OF] [AU]
+---------------------------
+
+Statement: penalty = GetAStarPenalty(node_x,node_y, [penalty_type=0])
+
+Parameters:
+	* X and Y coordinates for the node that should be viewed.
+	* Optional parameter penalty_type:
+		- 0: Check Single Node Penalty [Default]
+		- 1: Check Single Node Direction Penalty (direction)
+		- 2: Check Single Node Direction Penalty (amount)
+		
+Return values:
+	* Depends on given penalty_type:
+		- If penalty_type = 0: Basic Single Node Penalty amount. Can be negative or positive integer or zero.
+		- If penalty_type = 1: Direction, value from 0 to 7.
+		- If penalty_type = 2: Penalty amount given for a special direction.
+
+Description:
+Use this function if you need to know if a node has penalties applied for it.
+
+Notes:
+cbAStar library does not automatically apply any penalties, so if you are not using the features, you do not need to worry about any penalties and there is no need for using this function.
+
+
+LoadAStarMap() [OF]
+-------------------
+
+Statement: succeeded = LoadAStarMap(file_path$, [compatibility_mode=OFF])
+
+Parameters:
+	* file_path$: A string of a file path to be loaded.
+	* compatibility_mode: If ON, continue loading the file even if it has different amount of advanced features used in it. If OFF, stop loading and return False if the file has different amount of features. Default is OFF.
+	
+Return values:
+	* 0 (False):	Loading failed because the map file does not exist, is in wrong format or has a different amount of advanced features than cbAStar has currently configured to use.
+	* 1 (True):		Loading succeeded and the map file had just the same amount of advanced features that the library has configured to use.
+	* 2:			Loading succeeded but the map file had different amount of features than the current configuration. The map can still be used, but there may be some problems relating to the advanced features. This value can only be returned when the compatibility mode if set to ON.
+	
+Description:
+This function loads a previously saved cbAStar's map details. This gives you another way to initialize cbAStar when using your own map format. Though this function is also accessible if you use tilemaps. The main benefit of this function is achieved in situations where generating the map details (obstacles and optional penalties) from scratch would consume too much resources.
+
+Notes:
+To ensure that the loadable map is in an absolutely correct shape, keep the compatibility mode OFF. If the loadable map has different amount of advanced features used in it than cbAStar is currently configured to use, the compatibility mode ignores the differences between the advanced features which may lead to unexpected behaviour of the path finding algorithm. In most common situtations related to applications that are currently in production, the compatibility mode is not needed.
+
+When an application is still in development process, there is a possibility that the library's configuration will be changed by the programmer who uses the library. In this case, the compatibility mode can be handy when set to ON. But when you are releasing a version of your application to the public, consider the recommendation to turn OFF the compatibility mode.
+
+
+ResetFollowPath() [OF]
+----------------------
+
+Statement: ResetFollowPath(path)
+
+Parameters:
+	* path: A pointer to a MemBlock containing the desired path.
+	
+Return values:
+	* None
+	
+Description:
+If you have used FollowPath() function for a certain path, you can discard the path MemBlock's modifications made by FollowPath() by using this function. The effect in practice is that the MemBlock's size is cutted to it's original dimension and if you continue using FollowPath() with the same path, The path will be followed again from its begining.
+
+Notes:
+If the path was newer passed to FollowPath() but it is still passed to ResetFollowPath(), this function does not make any changes to the path MemBlock. This means that the function is very secure and does not always cut a MemBlock's size.
+
+
+SaveAStarMap() [OF]
+-------------------
+
+Statement: SaveAStarMap(file_path$)
+
+Parameters:
+	* file_path$: A string containing a file path where the current cbAStar's map details should be saved.
+	
+Return values:
+	* None
+	
+Description:
+This function saves details of the cbAStar's map array into a file. It saves all obstacles and penalties.
+
+Notes:
+BE CAREFUL with this function! If the given file exists, it will be overwritten!
+
+Size of the saved file grows if the library is configured to use its advanced features.
+
+
+SetAStarObstacle() [MF]
+-----------------------
+
+Statement: SetAStarObstacle(node_x,node_y, [is_obstacle=ON])
+
+Parameters:
+	* X and Y coordinates to indicate the desired node.
+	* Optional is_obstacle parameter:
+		- ON: Place an obstacle (default)
+		- OFF: Remove an obstacle
+
+Return values:
+	* None
+
+Description:
+With this function you can place obstacles to the map. The pathfinding algorithm will circulate these obstacles.
+
+
+SetAStarObstacleBox() [MF]
+--------------------------
+
+Statement: SetAStarObstacleBox(node_x,node_y, width,height, [filled=False], [is_obstacle=ON])
+
+Parameters:
+	* X, Y, width and height defines a rectangle in the cbAStar's map.
+	* Optional parameter filled:
+		- True: Fill the whole rectangle.
+		- False: Only fill the rectangle's borders. (default)
+	* Optional parameter is_obstacle:
+		- ON: Place obstacles (default)
+		- OFF: Remove obstacles
+
+Return values:
+	* None
+
+Description:
+Use this function to define a large area as obstacles - or remove obstacles from a large area.
+
+Keep the filling OFF if you are for example creating a house whose walls must be considered as obstacles. Then Use SetAStarObstacle() function to put little holes to the obstacle walls in order to allow access to the house through doors.
+
+Set the filling ON if you are creating an unwalkable area such as sea, mountain or gorge.
+
+
+SetAStarObstacleLine() [MF]
+---------------------------
+
+Statement: SetAStarObstacleLine(node1_x,node1_y, node2_x,node2_y, [is_obstacle=ON])
+
+Parameters:
+	* node1_x and node1_y: Define a starting node for the obstacle line.
+	* node2_x and node2_y: Define an ending node for the obstacle line.
+	* Optional parameter is_obstacle:
+		- ON: Place obstacles (default)
+		- OFF: Remove obstacles
+
+Return values:
+	* None
+
+Description:
+Use this function to define a line of obstacles (or remove them from a line). This is a really nice solution to define a single, long wall to be an obstacle.
+
+
+SetAStarPenalty() [OF] [AU]
+---------------------------
+
+Statement: SetAStarPenalty(node_x,node_y, single_node_penalty, single_node_penalty_direction, single_node_penalty_direction_amount)
+
+Parameters:
+	* X and Y coordinates define a node whose penalties will be changed.
+	* single_node_penalty: Set penalty amount that the node will give to the path if the pathfinding algorithm selects the node into a path.
+	* single_node_penalty_direction: Penalty direction to be set to the node. If the algorithm selects this node into a path and the path comes to this node in this direction, the path will have extra penalty defined in the next parameter.
+	* single_node_penalty_direction_amount: Relating to the previous parameter, this parameter sets the amount of the penalty.
+	
+Return values:
+	* None
+
+Description:
+With this function you can give penalties for a single node. Read more about the penalties in chapter Advanced features.
+
+Notes:
+All the penalty parameters are optional. If you leave some of them unset, their values in the node wont be changed. The same behaviour can be achieved if you use a constant named CBASTAR_DEFAULT in the penalty parameters that you do not wish to change.
+
+
+SetAStarPenaltyBox() [OF] [AU]
+------------------------------
+
+Statement: SetAStarPenaltyBox(node_x,node_y, width,height, filled, single_node_penalty, single_node_penalty_direction, single_node_penalty_direction_amount)
+
+Parameters:
+	* X and Y coordinates and width and height dimension define a node rectangle area whose penalties will be changed.
+	* filled:
+		- ON: Fill the whole rectangle.
+		- OFF: Only fill the borders.
+	* single_node_penalty: Set penalty amount that the node will give to the path if the pathfinding algorithm selects the node into a path.
+	* single_node_penalty_direction: Penalty direction to be set to the node. If the algorithm selects this node into a path and the path comes to this node in this direction, the path will have extra penalty defined in the next parameter.
+	* single_node_penalty_direction_amount: Relating to the previous parameter, this parameter sets the amount of the penalty.
+	
+Return values:
+	* None
+
+Description:
+With this function you can give penalties for an node area. Read more about the penalties in chapter Advanced features.
+
+Notes:
+All the penalty parameters are optional. If you leave some of them unset, their values in the node wont be changed. The same behaviour can be achieved if you use a contants named CBASTAR_DEFAULT in the penalty parameters that you do not wish to change.
+
+
+SetAStarPenaltyLine() [OF] [AU]
+-------------------------------
+
+Statement: SetAStarPenaltyLine(node1_x,node1_y, node2_x,node2_y, single_node_penalty, single_node_penalty_direction, single_node_penalty_direction_amount)
+
+Parameters:
+	* X and Y coordinates define the starting and ending nodes for a node line whose penalties will be changed.
+	* single_node_penalty: Set penalty amount that the node will give to the path if the pathfinding algorithm selects the node into a path.
+	* single_node_penalty_direction: Penalty direction to be set to the node. If the algorithm selects this node into a path and the path comes to this node in this direction, the path will have extra penalty defined in the next parameter.
+	* single_node_penalty_direction_amount: Relating to the previous parameter, this parameter sets the amount of the penalty.
+	
+Return values:
+	* None
+
+Description:
+With this function you can give penalties for nodes that are in a line. Read more about the penalties in chapter Advanced features.
+
+Notes:
+All the penalty parameters are optional. If you leave some of them unset, their values in the node wont be changed. The same behaviour can be achieved if you use a contants named CBASTAR_DEFAULT in the penalty parameters that you do not wish to change.
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+
+---------------------
+6. AUTHOR AND LICENCE
+---------------------
+
+The cbAStar library (version 1.0) is made by me, Jarkko Linnanvirta, in 2009. Everything in the library is made by me - except the media files located in Example Media directory. Those files are included in the library only for the needs of the Tilemap Example Program provided also withing the library. So this license affects anything in the library except the files in the Example Media directory.
+
+A user is allowed to use, modify and distribute the cbAStar library but not allowed to directly sell the library in any way. An exception to this is that when the library is a part of a bigger, commercial application aimed for end users (for example game players BUT NOT third party game/application developers), it can be sold at the same time WITH the master application (but not as a commercial plugin or a separate product) if the product is NOT SOLD OR DELIVERED WITH the library's source code.
+
+When distributing the library, a user does not have to mention the original author, but he or she is not allowed to claim that he or she (or someone else other than the real original author) is the original author of the library.
+
+The library can be distributed with some parts of it ripped off and/or with some new parts taken in.
+
+This means: You can distribute the library as a source code (even if you have modified it) if you are not selling it. If you sell the library, it must be distributed within a game or application that is a compiled executable (not anymore in a source code) meant for the end users and not for redevelopment by the customers that it is being sold to.
+
+
+The cbAStar logo
+----------------
+
+The above license applies also to the file named cbAStar_Logo.png, which is cbAStar's logo. The following additional license conditions applies to the logo.
+
+The logo is meant to be used in games that uses cbAStar. It is not required to be used, but it can give a game a little more professional look. The logo can be used only inside the game itself, on the game's website and/or the game's brochure without depending of publishing methods. It is not allowed to use the logo without a composite game or with a game that does not use the cbAStar library.
+
+The logo can be modified freely. If it is modified so strongly that it cannot be anymore connected to the original (and OFFICIAL) logo, the above license paragraph does not anymore apply to the modified logo. But you should keep this in mind when modifying the logo: people recognizes better the original logo. Modifying it too much can take off all of its benefits. Therefore the main idea for modifying the logo is that it can be made to more better suit any background image, color or menu that it will be used on. Little modifications can make the logo more better suit together with your game.
+
+What are the benefits of the logo? Well, not much. But it gives you a simple way to make a professional first glance to your game when a player launches it. Thus it tells the player that the game has an intelligent pathfinding algorithm that makes computer controlled characters and objects to make wise decisions about their moving routes. And it gives honour to the author of cbAStar (that means me). :D
+
+
+Author
+------
+
+If you have anything to ask, please find me from one of the following addresses:
+
+CoolBasic's forums: http://www.coolbasic.com/phpBB3/viewtopic.php?f=18&t=1766 (the topic is in the English side. If you speak Finnish, you can also find me from the Finnish side, but I have currently no plans on creating a topic there for cbAStar since the English side should serve it alone well enough)
+
+Send PM (Personal Message) to me on the CB Forums: http://www.coolbasic.com/phpBB3/memberlist.php?mode=viewprofile&u=92 (my nick name there is 'Jare')
+
+My email: jare1@mbnet.fi (Not yet! Send me email only if you haven't found answer from the forums stated above. Thanks.)
+
+P.S. Sorry for my bad English :-)
+
+With regards, Jarkko Linnanvirta 

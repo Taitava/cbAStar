@@ -1,0 +1,681 @@
+//cbAStar
+//Version 1.0 | 2009-08-04
+//Made by: Jarkko 'Jare' Linnanvirta 2009
+//This program is based on the following great article: http://www.policyalmanac.org/games/aStarTutorial.htm
+//License: Read cbAStar Documentation.txt file for the license.
+
+//Constant words
+Const CBASTAR_DIRECTION_EAST		= 0
+Const CBASTAR_DIRECTION_NORTH_EAST	= 1
+Const CBASTAR_DIRECTION_NORTH		= 2
+Const CBASTAR_DIRECTION_NORTH_WEST	= 3
+Const CBASTAR_DIRECTION_WEST		= 4
+Const CBASTAR_DIRECTION_SOUTH_WEST	= 5
+Const CBASTAR_DIRECTION_SOUTH		= 6
+Const CBASTAR_DIRECTION_SOUTH_EAST	= 7
+Const CBASTAR_DEFAULT				= "Default"
+
+//**************************************\\
+//BEGIN OF THE LIBRARY'S MODIFIABLE PART\\
+
+//Pathfinding Rules
+'[1 means TRUE/ON and 0 means FALSE/OFF.]
+Const CBASTAR_RULE_ACCEPT_COLLIDE_WALL_CORNERS	= 0	'A		While moving diagonally, can be moved If path goes beside a wall corner?
+Const CBASTAR_RULE_MOVE_BETWEEN_WALL_CORNERS	= 0	'B		While moving diagonally, can be moved If path goes between two walls corners?
+Const CBASTAR_RULE_MOVE_HORIZONTALLY			= 1	'C		Can be moved If only X coordinate is increasing Or decreasing?
+Const CBASTAR_RULE_MOVE_VERTICALLY				= 1	'D		Can be moved If only Y coordinate is increasing Or decreasing?
+Const CBASTAR_RULE_MOVE_DIAGONALLY				= 1	'E		Can be moved so that X And Y coordinates increase Or decrease at the same Time?
+Const CBASTAR_RULE_USE_SINGLE_NODE_PENALTY		= 0 'F	*	Avoid nodes that have separately marked extra penalty? Set To 1 only If you are using this feature And you know what you are doing. Keeping this ON without reason consumes futile memory.
+Const CBASTAR_RULE_USE_NODE_DIRECTION_PENALTY	= 0 'G	*	A node can be configured so that it will have extra penalty If it was approached from a specified direction.
+Const CBASTAR_RULE_USE_MOVE_DIRECTION_PENALTY	= 0 'H	*	Give penalty always when moving To specified directions?
+Const CBASTAR_RULE_USE_TURN_PENALTY				= 1	'I		Give penalty when changing direction?
+' Character * means that the rule is an Advanced Rule. See more about them below.
+
+//ILLEGAL RULE SETS:
+' A = 1 AND E = 0			(will not make any sense, though does not actually make anything broken)
+' A = 0 AND B = 1			(no sense. Actual behaviour would be like B = 0)
+' C = 0 AND D = 0 AND E = 0	(will make the algorithm to not find any paths)
+' F = 0 AND G = 1			(WILL CAUSE MEMORY ACCESS VIOLATION or some other error because it will not reserve enough memory.)
+'[Prevent using any of the rule sets described above!]
+
+//ABOUT ADVANCED RULES (marked above with * )
+'Advanced rules are used to make cbAStar prefer paths that are better for the moving character/object because of a more demanding environment including
+'for example gravity, influence made by enemies, or something else subject in a special location or direction.
+'Using advanced rules requires more configuration and will also consume more system memory.
+
+//Adjustment for some rules
+Dim CbAStarMoveDirectionPenalty(0) As Short
+If CBASTAR_RULE_USE_MOVE_DIRECTION_PENALTY Then
+	'Configure how much each move direction will have penalty
+	ReDim CbAStarMoveDirectionPenalty(7)
+	CbAStarMoveDirectionPenalty(CBASTAR_DIRECTION_EAST)			= 0
+	CbAStarMoveDirectionPenalty(CBASTAR_DIRECTION_NORTH_EAST)	= 0
+	CbAStarMoveDirectionPenalty(CBASTAR_DIRECTION_NORTH)		= 0
+	CbAStarMoveDirectionPenalty(CBASTAR_DIRECTION_NORTH_WEST)	= 0
+	CbAStarMoveDirectionPenalty(CBASTAR_DIRECTION_WEST)			= 0
+	CbAStarMoveDirectionPenalty(CBASTAR_DIRECTION_SOUTH_WEST)	= 0
+	CbAStarMoveDirectionPenalty(CBASTAR_DIRECTION_SOUTH)		= 0
+	CbAStarMoveDirectionPenalty(CBASTAR_DIRECTION_SOUTH_EAST)	= 0
+EndIf
+If CBASTAR_RULE_USE_TURN_PENALTY Then
+	'Configure how much To get penalty when changing direction
+	Global CbAStarTurnPenalty : CbAStarTurnPenalty = 5
+EndIf
+
+
+//END OF THE LIBRARY'S MODIFIABLE PART\\
+//************************************\\
+'The license ALLOWS you to freely modify also the rest of this file (and distribute it after modifications), but if you are new to this library, it is NOT RECOMMENDED.
+
+//Specifications
+Const CBASTAR_VERSION	= 1.0
+
+//Global Variables
+Global CbAStarMapWidth, CbAStarMapHeight
+Global CbAStarMapDepth						'Depth is used To know what features will be added To cbAStar's map array And what size it will be.
+Global CbAStarStartX,	CbAStarStartY
+Global CbAStarEndX,		CbAStarEndY
+Global CbAStarIsCalculating
+Global FollowPathX, FollowPathY
+
+//Types
+Type CbAStarOpenList
+	Field id
+	Field node
+	Field node_parent
+EndType
+
+Type CbAStarClosedList
+	Field id
+	Field node
+	Field node_parent
+EndType
+
+Type CbAStarNode
+	Field node
+EndType
+
+//Arrays
+Dim CbAStarMap(1,1,1)
+If CBASTAR_RULE_USE_SINGLE_NODE_PENALTY Then
+	//Resize the array For more features If needed
+	If CBASTAR_RULE_USE_NODE_DIRECTION_PENALTY Then
+		CbAStarMapDepth = 4
+		'ReDim CbAStarMap(CBASTAR_MAP_W,CBASTAR_MAP_H,4)
+	Else
+		CbAStarMapDepth = 2
+		'ReDim CbAStarMap(CBASTAR_MAP_W,CBASTAR_MAP_H,2)
+	EndIf
+Else
+	CbAStarMapDepth = 1
+EndIf
+'Last dimension: 0 = node pointer (integer); 1 = is obstacle? (boolean); 2 = single node penalty (RULE F); 3 = penalty direction {0,1,2,3,4,5,6 OR 7} (RULE G); 4 = penalty direction amount (RULE G)
+
+
+//Functions
+
+Function cbAStarInitialize(map_width, map_height)
+	CbAStarMapWidth	= map_width
+	CbAStarMapHeight= map_height
+	ReDim CbAStarMap(CbAStarMapWidth-1,CbAStarMapHeight-1,CbAStarMapDepth)
+EndFunction
+
+Function cbAStarInitializeUsingTilemap()
+	cbAStarInitialize(MapWidth(),MapHeight())
+	'Copy Tilemap's collision floor To CbAStarMap's obstacle floor
+	For x = 0 To CbAStarMapWidth-1
+		For y = 0 To CbAStarMapHeight-1
+			CbAStarMap(x,y,1) = GetMap2(2,x,y)
+		Next y
+	Next x
+EndFunction
+
+Function CalculatePath(start_x,start_y, end_x,end_y, mode=0)
+	//Main Function To calculate a path.
+	//Return values:
+	//	Positive integer	= Ponter to a MemBlock containing the calculated path.
+	//	0 (False)			= Path calculation is Not yet ready (this can be returned only If MODE is set To 1).
+	//	-1 (Negative 1)		= There is no possible path between the start point And the End point.
+	//mode = 0 (calculate whole path at once), 1 (calculate only one node And continue when Function is called again)
+	
+	'Setup common variables
+	If Not cbAStarIsCalculating Then
+		CbAStarStartX	= start_x	: CbAStarStartY	= start_y
+		CbAStarEndX		= end_x		: CbAStarEndY	= end_y
+	EndIf
+	
+	Repeat
+		If CbAStarIsCalculating Then
+			'Continue previous calculation
+			
+			'Find a node with lowest path score
+			node = FindNodeWithLowestPathScore()
+		Else
+			'Start New calculation
+			CbAStarIsCalculating = True
+			
+			'Create starting node
+			node = CreateNode(start_x,start_y)
+			AddNodeToOpenList(node,0)
+		EndIf
+		
+		If node <> False Then
+			ol.CbAStarOpenList = ConvertToType(PeekInt(node,10))
+			AddNodeToClosedList(node,ol\node_parent)
+			node_x	= PeekShort(node,0)
+			node_y	= PeekShort(node,2)
+			CheckAdjacentNodes(node_x,node_y)
+		EndIf
+		
+		is_path_found		= (node_x = CbAStarEndX And node_y = CbAStarEndY)
+		is_path_impossible	= IsOpenListEmpty()
+	Until is_path_found Or is_path_impossible Or mode=1
+	
+	'Return found path
+	If is_path_found Then
+		path = GatherPath()
+		ReversePath(path)
+		ResetPath()
+		Return path
+	EndIf
+	
+	'Return error If path cannot be found
+	If is_path_impossible Then
+		ResetPath()
+		Return -1
+	EndIf
+	
+	'Return zero If path is still being calculated
+	Return 0
+	
+EndFunction
+
+Function CreateNode(x,y)
+	node = MakeMEMBlock(14)
+	PokeShort	node, 0, x
+	PokeShort	node, 2, y
+	PokeByte	node, 4, CbAStarMap(x,y,1) 'Is this node an obstacle?
+	CbAStarMap(x,y,0) = node
+	n.CbAStarNode = New(CbAStarNode)
+	n\node = node
+	Return node
+EndFunction
+
+Function AddNodeToOpenList(node, node_parent)
+	list = PeekByte(node,5)
+	If list = 1 Then Return CheckIfNodeCouldGetBetterParent(node, node_parent)
+	If list Then Return False 'Do Not add the node If it already belongs To the open Or closed list.
+	ol.CbAStarOpenList	= New(CbAStarOpenList)
+	ol\id				= ConvertToInteger(ol)
+	ol\node				= node
+	ol\node_parent		= node_parent
+	PokeByte	node, 5,	1
+	PokeInt		node, 10,	ol\id
+	
+	'Calculate node scores
+	If node_parent Then 'Start node does Not have a parent, so skip it (it will have score values 0 [zero], but it does Not matter)
+		node_x				= PeekShort(node,			0)
+		node_y				= PeekShort(node,			2)
+		node_parent_x		= PeekShort(node_parent,	0)
+		node_parent_y		= PeekShort(node_parent,	2)
+		node_parent_g_cost	= PeekShort(node_parent,	6)
+		PokeShort node, 6, CalculateGCost(node_x,node_y, node_parent_x,node_parent_y, node_parent_g_cost)
+		PokeShort node, 8, CalculateHCost(node_x,node_y, CbAStarEndX,CbAStarEndY)
+	EndIf
+EndFunction
+
+Function AddNodeToClosedList(node, node_parent)
+	list = PeekByte(node,5)
+	If list = 2 Then Return False 'Don Not add the node If it already belongs To the closed list.
+	If list = 1 Then RemoveNodeFromOpenList(node)
+	cl.CbAStarClosedList= New(CbAStarClosedList)
+	cl\id				= ConvertToInteger(cl)
+	cl\node				= node
+	cl\node_parent		= node_parent
+	PokeByte	node, 5, 2
+	PokeInt		node, 10,	cl\id
+EndFunction
+
+Function RemoveNodeFromOpenList(node)
+	ol.CbAStarOpenList = ConvertToType(PeekInt(node,10))
+	Delete ol
+	PokeByte node, 5, False
+EndFunction
+
+Function CheckAdjacentNodes(center_x,center_y)
+	node_parent = CbAStarMap(center_x,center_y,0)
+	
+	For x = Max(center_x-1,0) To Min(center_x+1,CbAStarMapWidth-1)
+	
+		For y = Max(center_y-1,0) To Min(center_y+1,CbAStarMapHeight-1)
+		
+			If x <> center_x Or y <> center_y Then
+				'This section goes through all adjacent nodes
+				
+				'Check out rules:
+				If Not CbAStarMap(x,y,1) Then 'Do Not move into obstacles
+				
+					If CBASTAR_RULE_MOVE_HORIZONTALLY Or (x = center_x Or y <> center_y) Then 'Do Not move horizontally If denied
+						
+						If CBASTAR_RULE_MOVE_VERTICALLY Or (y = center_y  Or x <> center_x) Then 'Do Not move vertically If denied
+					
+							If CBASTAR_RULE_MOVE_DIAGONALLY Or (x=center_x Xor y=center_y) Then 'Do Not move diagonally If denied
+							
+								If Not IsWallCornerBetweenNodes(center_x,center_y, x,y) Then 'Do Not collide wall corners If denied
+									'If the node is allowed For walking, add it To the open list
+									
+									'Ensure that the node details exist
+									node = CbAStarMap(x,y,0)
+									If Not node Then node = CreateNode(x,y)
+									
+									'Add node To the open list
+									AddNodeToOpenList(node, node_parent)
+									
+								EndIf
+								
+							EndIf
+							
+						EndIf
+						
+					EndIf
+					
+				EndIf
+				
+			EndIf
+			
+		Next y
+		
+	Next x
+	
+EndFunction
+
+Function CalculateGCost(x,y, parent_x,parent_y, parent_g_cost)
+	'Note! Given coordinates must be adjacent To Each other!
+	If x<>parent_x And y<>parent_y Then g_cost = 14+parent_g_cost Else g_cost = 10+parent_g_cost
+	If CBASTAR_RULE_USE_MOVE_DIRECTION_PENALTY Then
+		direction	= CoordinateChangeToDirection(x-parent_x,y-parent_y)
+		g_cost		= g_cost + CbAStarMoveDirectionPenalty(direction)
+	EndIf
+	If CBASTAR_RULE_USE_SINGLE_NODE_PENALTY Then
+		g_cost = g_cost + CbAStarMap(x,y,2)
+	EndIf
+	If CBASTAR_RULE_USE_NODE_DIRECTION_PENALTY Then
+		direction = CoordinateChangeToDirection(x-parent_x,y-parent_y)
+		If CbAStarMap(x,y,3) = direction Then g_cost = g_cost + CbAStarMap(x,y,4)
+	EndIf
+	If CBASTAR_RULE_USE_TURN_PENALTY Then
+		node_parent			= CbAStarMap(parent_x,parent_y,0)
+		cl.CbAStarClosedList= ConvertToType(PeekInt(node_parent,10))
+		node_grand_parent	= cl\node_parent
+		If node_grand_parent Then
+			grand_parent_x		= PeekShort(node_grand_parent,0)
+			grand_parent_y		= PeekShort(node_grand_parent,2)
+			direction_to_parent	= CoordinateChangeToDirection(parent_x	- grand_parent_x,	parent_y- grand_parent_y)
+			direction_to_current= CoordinateChangeToDirection(x			- parent_x,			y		- parent_y)
+			If direction_to_parent <> direction_to_current Then g_cost + CbAStarTurnPenalty
+		EndIf
+	EndIf
+	Return g_cost
+EndFunction
+
+Function CalculateHCost(x,y, end_x,end_y)
+	Return (Abs(x-end_x)+Abs(y-end_y))*10
+EndFunction
+
+Function FindNodeWithLowestPathScore()
+	lowest_f		= -1
+	lowest_f_node	= False
+	For ol.CbAStarOpenList = Each CbAStarOpenList
+		g = PeekShort(ol\node,6)
+		h = PeekShort(ol\node,8)
+		f = g+h
+		If f < lowest_f Or lowest_f = -1 Then
+			lowest_f		= f
+			lowest_f_node	= ol\node
+		EndIf
+	Next ol
+	Return lowest_f_node
+EndFunction
+
+Function CheckIfNodeCouldGetBetterParent(node, node_parent_candidate)
+	'Note! This Function works only when a node is in open list!
+	If PeekByte(node,5) <> 1		Then Return False
+	If Not node_parent_candidate	Then Return False
+	list = PeekByte(node, 5)
+	ol.CbAStarOpenList	= ConvertToType(PeekInt(node,10))
+	node_parent			= ol\node_parent
+	If node_parent Then 
+		node_parent_g			= PeekShort(node_parent,			6)
+		node_parent_candidate_g	= PeekShort(node_parent_candidate,	6)
+		If node_parent_candidate_g < node_parent_g Then
+			ol\node_parent = node_parent_candidate
+			node_x					= PeekShort(node,0)
+			node_y					= PeekShort(node,2)
+			node_parent_candidate_x	= PeekShort(node_parent_candidate,0)
+			node_parent_candidate_y	= PeekShort(node_parent_candidate,2)
+			PokeShort node, 6, CalculateGCost(node_x,node_y, node_parent_candidate_x,node_parent_candidate_y, node_parent_candidate_g)
+		EndIf
+	EndIf
+EndFunction
+
+Function IsWallCornerBetweenNodes(node1_x,node1_y, node2_x,node2_y)
+	wall1_x 	= node1_x
+	wall1_y 	= node2_y
+	wall2_x 	= node2_x
+	wall2_y 	= node1_y
+	is_wall1	= CbAStarMap(wall1_x,wall1_y,1)
+	is_wall2	= CbAStarMap(wall2_x,wall2_y,1)
+	If CBASTAR_RULE_MOVE_BETWEEN_WALL_CORNERS Then
+		If CBASTAR_RULE_ACCEPT_COLLIDE_WALL_CORNERS Then
+			Return False
+		Else
+			Return is_wall1 Or is_wall2
+		EndIf
+	Else
+		If CBASTAR_RULE_ACCEPT_COLLIDE_WALL_CORNERS Then
+			Return is_wall1 And is_wall2
+		Else
+			Return is_wall1 Or is_wall2
+		EndIf
+	EndIf
+EndFunction
+
+Function IsOpenListEmpty()
+	ol.CbAStarOpenList = Last(CbAStarOpenList)
+	Return ol = NULL
+EndFunction
+
+Function ResetPath()
+	For ol.CbAStarOpenList = Each CbAStarOpenList
+		Delete ol
+	Next ol
+	For cl.CbAStarClosedList = Each CbAStarClosedList
+		Delete cl
+	Next cl
+	For n.CbAStarNode = Each CbAstarNode
+		node_x = PeekShort(n\node,0)
+		node_y = PeekShort(n\node,2)
+		CbAStarMap(node_x,node_y,0) = False
+		DeleteMEMBlock(n\node)
+		Delete n
+	Next n
+	CbAStarIsCalculating = False
+EndFunction
+
+Function GatherPath()
+	node = CbAStarMap(CbAStarEndX,CbAStarEndY,0)
+	path = MakeMEMBlock(1)
+	size = 0
+	Repeat
+		If node Then
+			size + 4
+			ResizeMEMBlock path,size
+			node_x	= PeekShort(node,0)
+			node_y	= PeekShort(node,2)
+			PokeShort path, size-4, node_x
+			PokeShort path, size-2, node_y
+			cl.CbAStarClosedList= ConvertToType(PeekInt(node,10))
+			node				= cl\node_parent
+		EndIf
+	Until (node_x=CbAStarStartX And node_y=CbAStarStartY) Or node=False
+	Return path
+EndFunction
+
+Function ReversePath(path)
+	size = MEMBlockSize(path)
+	For i = 0 To size/2-4 Step 4
+		temp_int = PeekInt(path,size-i-4)
+		PokeInt path, size-i-4,	PeekInt(path,i)
+		PokeInt path, i,		temp_int
+	Next i
+EndFunction
+
+Function CoordinateChangeToDirection(x,y)
+	'Parameter values must be from -1 To 1
+	If x = 1	And y = 0	Then Return 0
+	If x = 1	And y = -1	Then Return 1
+	If x = 0	And y = -1	Then Return 2
+	If x = -1	And y = -1	Then Return 3
+	If x = -1	And y = 0	Then Return 4
+	If x = -1	And y = 1	Then Return 5
+	If x = 0	And y = 1	Then Return 6
+	If x = 1	And y = 1	Then Return 7
+EndFunction
+
+Function DirectionToCoordinateChange(direction)
+	Select direction
+	Case 0
+		Return "1 0"
+	Case 1
+		Return "1 -1"
+	Case 2
+		Return "0 -1"
+	Case 3
+		Return "-1 -1"
+	Case 4
+		Return "-1 0"
+	Case 5
+		Return "-1 1"
+	Case 6
+		Return "0 1"
+	Case 7
+		Return "1 1"
+	EndSelect
+EndFunction
+
+Function SetAStarObstacle(x,y, obstacle=1)
+	If obstacle	< 0	Or obstacle	> 1					Then Return False
+	If x		< 0	Or x		> CbAStarMapWidth	Then Return False
+	If y		< 0	Or y		> CbAStarMapHeight	Then Return False
+	CbAStarMap(x,y,1) = obstacle
+EndFunction
+
+Function SetAStarObstacleLine(x1,y1, x2,y2, obstacle=1)
+	If obstacle	< 0	Or obstacle	> 1					Then Return False
+	If x1		< 0	Or x1		> CbAStarMapWidth	Then Return False
+	If y1		< 0	Or y1		> CbAStarMapHeight	Then Return False
+	If x2		< 0	Or x2		> CbAStarMapWidth	Then Return False
+	If y2		< 0	Or y2		> CbAStarMapHeight	Then Return False
+	x_difference	= Abs(x1-x2)
+	y_difference	= Abs(y1-y2)
+	maxi			= Max(x_difference,y_difference)
+	For i# = 0 To maxi
+		pros# = i/maxi
+		x	= x1 + (x2-x1) * pros
+		y	= y1 + (y2-y1) * pros
+		CbAStarMap(x,y,1) = obstacle
+	Next i#
+EndFunction
+
+Function SetAStarObstacleBox(x,y, w,h, filled=0, obstacle=1)
+	If obstacle	< 0	Or obstacle	> 1					Then Return False
+	If filled	< 0	Or filled	> 1					Then Return False
+	If x		< 0	Or x		> CbAStarMapWidth	Then Return False
+	If y		< 0	Or y		> CbAStarMapHeight	Then Return False
+	If w		< 0									Then Return False
+	If h		< 0									Then Return False
+	If x+w		> CbAStarMapWidth					Then w = CbAStarMapWidth - x
+	If y+h		> CbAStarMapHeight					Then h = CbAStarMapHeight- y
+	If filled Then
+		For xx = x To x+w-1
+			For yy = y To y+h-1
+				CbAStarMap(xx,yy,1) = obstacle
+			Next yy
+		Next xx
+	Else
+		SetAStarObstacleLine(x,		y,		x+w-1,		y,		obstacle)
+		SetAStarObstacleLine(x,		y+h-1,	x+w-1,		y+h-1,	obstacle)
+		SetAStarObstacleLine(x,		y,		x,			y+h-1,	obstacle)
+		SetAStarObstacleLine(x+w-1,	y,		x+w-1,		y+h-1,	obstacle)
+	EndIf
+EndFunction
+
+Function SetAStarPenalty(x,y, node_penalty$, node_penalty_direction$="Default", node_penalty_direction_value$="Default")
+	If node_penalty_direction <> CBASTAR_DEFAULT And (node_penalty_direction < 0 Or node_penalty_direction > 7) Then Return False
+	If Not CBASTAR_RULE_USE_SINGLE_NODE_PENALTY	Then Return False
+	If x	< 0	Or x	> CbAStarMapWidth-1		Then Return False
+	If y	< 0	Or y	> CbAStarMapHeight-1	Then Return False
+	If node_penalty	<> CBASTAR_DEFAULT			Then CbAStarMap(x,y,2) = Int(node_penalty)
+	If CBASTAR_RULE_USE_NODE_DIRECTION_PENALTY Then
+		If node_penalty_direction		<> CBASTAR_DEFAULT	Then CbAStarMap(x,y,3) = Int(node_penalty_direction)
+		If node_penalty_direction_value	<> CBASTAR_DEFAULT	Then CbAStarMap(x,y,4) = Int(node_penalty_direction_value)
+	EndIf
+EndFunction
+
+Function SetAStarPenaltyLine(x1,y1, x2,y2, node_penalty$, node_penalty_direction$="Default", node_penalty_direction_value$="Default")
+	If node_penalty_direction <> CBASTAR_DEFAULT And (node_penalty_direction < 0 Or node_penalty_direction > 7) Then Return False
+	If Not CBASTAR_RULE_USE_SINGLE_NODE_PENALTY		Then Return False
+	If x1		< 0	Or x1		> CbAStarMapWidth	Then Return False
+	If y1		< 0	Or y1		> CbAStarMapHeight	Then Return False
+	If x2		< 0	Or x2		> CbAStarMapWidth	Then Return False
+	If y2		< 0	Or y2		> CbAStarMapHeight	Then Return False
+	x_difference	= Abs(x1-x2)
+	y_difference	= Abs(y1-y2)
+	maxi			= Max(x_difference,y_difference)
+	For i# = 0 To maxi
+		pros# = i/maxi
+		x	= x1 + (x2-x1) * pros
+		y	= y1 + (y2-y1) * pros
+		If node_penalty <> CBASTAR_DEFAULT Then CbAStarMap(x,y,2) = Int(node_penalty)
+		If CBASTAR_RULE_USE_NODE_DIRECTION_PENALTY Then
+			If node_penalty_direction		<> CBASTAR_DEFAULT	Then CbAStarMap(x,y,3) = Int(node_penalty_direction)
+			If node_penalty_direction_value	<> CBASTAR_DEFAULT	Then CbAStarMap(x,y,4) = Int(node_penalty_direction_value)
+		EndIf
+	Next i#
+EndFunction
+
+Function SetAStarPenaltyBox(x,y, w,h, filled, node_penalty$, node_penalty_direction$="Default", node_penalty_direction_value$="Default")
+	If node_penalty_direction <> CBASTAR_DEFAULT And (node_penalty_direction < 0 Or node_penalty_direction > 7) Then Return False
+	If Not CBASTAR_RULE_USE_SINGLE_NODE_PENALTY		Then Return False
+	If filled	< 0	Or filled	> 1					Then Return False
+	If x		< 0	Or x		> CbAStarMapWidth	Then Return False
+	If y		< 0	Or y		> CbAStarMapHeight	Then Return False
+	If w		< 0									Then Return False
+	If h		< 0									Then Return False
+	If x+w		> CbAStarMapWidth					Then w = CbAStarMapWidth - x
+	If y+h		> CbAStarMapHeight					Then h = CbAStarMapHeight- y
+	If filled Then
+		For xx = x To x+w-1
+			For yy = y To y+h-1
+				If node_penalty <> CBASTAR_DEFAULT Then CbAStarMap(xx,yy,2) = Int(node_penalty)
+				If CBASTAR_RULE_USE_NODE_DIRECTION_PENALTY Then
+					If node_penalty_direction		<> CBASTAR_DEFAULT	Then CbAStarMap(xx,yy,3) = Int(node_penalty_direction)
+					If node_penalty_direction_value	<> CBASTAR_DEFAULT	Then CbAStarMap(xx,yy,4) = Int(node_penalty_direction_value)
+				EndIf
+			Next yy
+		Next xx
+	Else
+		SetAStarPenaltyLine(x,		y,		x+w-1,		y,		node_penalty$, node_penalty_direction$="Default", node_penalty_direction_value$="Default")
+		SetAStarPenaltyLine(x,		y+h-1,	x+w-1,		y+h-1,	node_penalty$, node_penalty_direction$="Default", node_penalty_direction_value$="Default")
+		SetAStarPenaltyLine(x,		y,		x,			y+h-1,	node_penalty$, node_penalty_direction$="Default", node_penalty_direction_value$="Default")
+		SetAStarPenaltyLine(x+w-1,	y,		x+w-1,		y+h-1,	node_penalty$, node_penalty_direction$="Default", node_penalty_direction_value$="Default")
+	EndIf
+EndFunction
+
+Function GetAStarObstacle(x,y)
+	Return CbAstarMap(x,y,1)
+EndFunction
+
+Function GetAStarPenalty(x,y, penalty_type=0)
+	//penalty_type can be:
+	//	0 = get single node penalty
+	//	1 = get single node direction penalty (the direction)
+	//	2 = get single node direction penalty (the penalty amount)
+	If Not CBASTAR_RULE_USE_SINGLE_NODE_PENALTY								Then Return False
+	If False = CBASTAR_RULE_USE_NODE_DIRECTION_PENALTY And penalty_type>0	Then Return False
+	Return CbAStarMap(x,y,2+penalty_type)
+EndFunction
+
+Function SaveAStarMap(file_path$)
+	//Note! If file in file_path$ already exists, it will be overwritten!
+	f = OpenToWrite(file_path)
+	WriteByte	f, 1 'Map format version
+	WriteShort	f, CBAStarMapWidth
+	WriteShort	f, CBAStarMapHeight
+	WriteByte	f, CbAStarMapDepth
+	For x = 0 To CBAStarMapWidth-1
+		For y = 0 To CBAStarMapHeight-1
+			WriteByte f, CbAStarMap(x,y,1)
+			If CbAStarMapDepth > 1 Then WriteShort f, CbAStarMap(x,y,2)
+			If CbAStarMapDepth = 4 Then
+				WriteByte	f, CbAStarMap(x,y,3)
+				WriteShort	f, CbAStarMap(x,y,4)
+			EndIf
+		Next y
+	Next x
+	CloseFile f
+EndFunction
+
+Function LoadAStarMap(file_path$, compatibility_mode=0)
+	//Note!	It is possible that a map that is being loaded has MORE Or LESS properties declared in it than what cbAStar IS CURRENTLY configured To use.
+	//		A map can be loaded even If it has different amount of properties, but in some cases it may cause strange behaviour in the program's those parts
+	//		that are outside this library but uses this library. This is why this Function's Default behaviour is To verify that the map file which is being
+	//		loaded contais equal level of properties that cbAStar is currently configured To use (see RULES F And G!). If the map file contains different level
+	//		of properties, the loading will fail And the Function returns False. If you do want To load maps that have different level of properties, it can
+	//		be done by setting the optional compatibility_mode parameter To ON ( = 1). But If you do Not need the compatibility feature, please keep it False.
+	//Return values:
+	//		Integer 1 = The map was loaded correctly
+	//		Integer 2 = The map was loaded correctly, but the loaded map needed To be convertet To meet the current cbAStar configuration (only when
+	//			compatibility_mode is set To ON).
+	//		0 (False) = The map cannot be loaded because the file does Not exists Or the map properties is different than cbAStar current configuration (And
+	//			compatibility_mode is set To OFF). False can also be returned If the map file is in unsupported format (For example a newer cbAStar version
+	//			has been written it).
+	If Not FileExists(file_path) Then Return False
+	f			= OpenToRead(file_path)
+	map_version	= ReadByte(f)
+	If map_version <> 1 Then Return False
+	map_width	= ReadShort(f)
+	map_height	= ReadShort(f)
+	map_depth	= ReadByte(f)
+	If map_depth <> CbAStarMapDepth And compatibility_mode=OFF Then Return False
+	CbAStarInitialize(map_width,map_height)
+	For x = 0 To CBAStarMapWidth-1
+		For y = 0 To CBAStarMapHeight-1
+			CbAStarMap(x,y,1) = ReadByte(f)
+			If map_depth > 1		Then single_node_penalty = ReadShort(f)
+			If CbAStarMapDepth > 1	Then CbAStarMap(x,y,2) = single_node_penalty
+			If map_depth = 4 Then
+				single_node_penalty_direction		= ReadByte(f)
+				single_node_penalty_direction_value	= ReadShort(f)
+			EndIf
+			If CbAStarMapDepth = 4 Then
+				CbAStarMap(x,y,3) = single_node_penalty_direction
+				CbAStarMap(x,y,4) = single_node_penalty_direction_value
+			EndIf
+		Next y
+	Next x
+	CloseFile f
+	Return 1 + (map_depth <> CbAStarMapDepth)
+EndFunction
+
+Function FollowPath(path)
+	//Return values:
+	//	True 	= Reading Next node succeeded
+	//	False	= Path does Not have anymore nodes
+	path_size = MEMBlockSize(path)
+	
+	'This Function stores extra information To the given path.
+	'First check out, does this information already exists?
+	If path_size Mod 4 <> 0 Then 
+		'Yes, the information exists - so we can find out where we Left Last Time when followed this path.
+		node_index = PeekShort(path,path_size-2)
+		If node_index*4 > path_size-6 Then Return False
+	Else
+		'No, there is no extrainfo - so start To follow this path from the First node.
+		node_index = 0
+		'However, the MemBlock needs To be resized so that it can have stored the extra info into it at the End of this Function.
+		path_size + 2
+		ResizeMEMBlock path, path_size
+	EndIf
+	
+	read_position	= node_index*4
+	FollowPathX		= PeekShort(path, read_position)
+	FollowPathY		= PeekShort(path, read_position+2)
+	PokeShort path, path_size-2, node_index+1
+	Return True
+EndFunction
+
+Function ResetFollowPath(path)
+	path_size = MEMBlockSize(path)
+	If path_size Mod 4 <> 0 Then ResizeMEMBlock path, path_size-2
+EndFunction

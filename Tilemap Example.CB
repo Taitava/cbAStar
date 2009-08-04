@@ -1,0 +1,153 @@
+//CbAStar Tilemap Example Program
+'Use this example program to watch the cbAStar library in action and to learn how to implement it into a tilemap based
+'game.
+
+//Include cbAStrar in order to use its functions.
+Include "cbAStar.cb"
+
+//Configure window settings
+SCREEN 1024,768
+FrameLimit 40
+SetWindow "cbAStar Version "+CBASTAR_VERSION+" - Tilemap Example Program"
+
+//Define global variables
+Global Map
+Global TileW, TileH
+
+//Load media
+Map			= LoadMap("Example Media\cdm2.til","Example Media\tileset.bmp")
+character	= LoadObject("Example Media\guy.bmp",72)
+PlayObject map,0,0,.5
+'Set character speed
+Const CHARACTER_SPEED = 3 'in PPC (Pixels Per main loop Cycle)
+
+//Initialize cbAStar in order to be able to use it correctly
+'When initialized with ...UsingTilemap() function, cbAStar automatically reads the whole tilemap and copies obstacles
+'from the tilemap to cbAStar's own map array. We do not even need to pass map width and height to this function,
+'because the function will read those values from the tilemap.
+'Note! A tilemap must be loaded BEFORE using this function!
+cbAStarInitializeUsingTilemap()
+
+//Configure collision between the character and the tilemap
+'This actually is not needed because of the intelligent pathfinding system :)
+'I should not affect anywhere, but we do this just in case.
+SetupCollision character, Map, 2, 4, 1
+
+//Calculate a single tile dimensions
+TileW		= ObjectSizeX(Map)/MapWidth()
+TileH		= ObjectSizeY(Map)/MapHeight()
+
+//Now we are ready to start the main loop
+Repeat
+	
+	//Click with mouse starts the pathfinding
+	If MouseHit(1) Then
+		If path > 0 Then DeleteMEMBlock path 'Delete old path If exists so that it will Not consume futile memory
+		
+		//Calculate starting And Ending nodes
+		'Node coordinates must always be so that they fit in a 2D array!
+		'Starting node is calculated from the character's position
+		start_node_x	= WorldXtoNodeX(ObjectX(character))
+		start_node_y	= WorldYtoNodeY(ObjectY(character))
+		'Ending node is calculated from the mouse cursor's position
+		end_node_x		= WorldXtoNodeX(MouseWX())
+		end_node_y		= WorldYtoNodeY(MouseWY())
+		
+		//Calculate whole path at once
+		'Variable path will have one of the following values:
+		'	Positive Integer	= Pointer To a MemBlock containing the calculated path
+		'	-1 (Negative One)	= Means that there is no possible path between the starting And ending node.
+		path = CalculatePath(start_node_x,start_node_y, end_node_x,end_node_y)
+		
+		//If the path calculating succeeded, Read the First node OFF from the path
+		'The First node is the same As the character's current location. That is why we can skip it.
+		If path > 0 Then FollowPath(path) 'FollowPath() now seeks To the Next node in the path
+		
+		//Reset next_node_x And next_node_y
+		'When next_node_x is -1 Or next_node_y is -1, we know that it is needed To Read the Next node's coordinates
+		'ON the path in order To know where the character should be heading For.
+		next_node_x	= -1
+		next_node_y	= -1
+		
+		//A note about the terms node And tile!
+		'A node's coordinates are calculated exactly the same way As a tile's coordinates. So you can actually think
+		'that the term "node" means the same As the term "tile" If it is easier For you To figure out. The only difference between the
+		'term node And the term tile is that inside the cbAStar library the term tile is Not used anywhere because
+		'the library has been designed To be used also in environments that does Not necessarily use tiles Or tilemaps.
+		'So the point is: The term node is used mainly inside the cbAStar library And the term tile is used outside the
+		'library in those implementations that uses tiles And tilemaps - such As this example program.
+	EndIf
+	
+	//If we do have a succesfully calculated path, make the character To follow it.
+	If path > 0 Then
+		
+		//If we do Not know coordinates where the character should Next be heading For, find them out.
+		If next_node_x = -1 Or next_node_y = -1 Then
+			//Try To follow the path.
+			'If we are already at the End of the path, FollowPath() will Return False And the character just stays in
+			'its place.
+			If FollowPath(path) Then
+				'FollowPath() Return the Next node's coordinates in Global variables.
+				'Pick up the results:
+				next_node_x = FollowPathX
+				next_node_y = FollowPathY
+			EndIf
+		EndIf
+		
+		//If we do know coordinates of a node where the character should be heading For, move the character
+		If next_node_x > -1 Or next_node_y > -1 Then
+			//Convert the Next node's coordinates To the world coordinates so that they can be used with the character object.
+			target_x		= NodeXtoWorldX(next_node_x)
+			target_y		= NodeYtoWorldY(next_node_y)
+			
+			//Calculate an angle required To head For the target coordinates And turn the character
+			character_angle#= GetAngle(ObjectX(character),-ObjectY(character), target_x,-target_y)
+			RotateObject character, character_angle
+			
+			//Finally move the character
+			'The speed of the character is configured in a constant at the beginning of this example program.
+			MoveObject character, CHARACTER_SPEED
+			
+			//Figure If the character has reached its current target coordinates?
+			'It would be unrealistic To check out the character's And the target's coordinates like they should be exactly the equal
+			'To Each other. If you make the comparing statement To do it that way, the character can First move a little over its
+			'target And Then try To come back because the character speed makes it move a litle bit unaccurately. That would be ugly
+			'thing To happen!
+			If Distance(ObjectX(character),ObjectY(character), target_x,target_y) < character_speed Then
+				'The character is near enough To the target.
+				'Reset next_node_x And next_node_y To trigger the code block at lines 85 - 95 To fetch a Next target.
+				next_node_x = -1
+				next_node_y = -1
+			EndIf
+		EndIf
+	EndIf
+	
+	//Move the camera so that we can always see the character
+	'UpdateGame is prefered To be commanded Before moving the camera.
+	UpdateGame
+    CloneCameraPosition character
+
+	//Finally draw anything we have in this example program
+    DrawScreen
+Forever
+
+//Tool functions for converting coordinates
+'These four functions are used to convert node coordinates to world coordinates - and on the contrary
+'The same functions can also be used with tiles instead of nodes.
+
+Function NodeXtoWorldX(x)
+	Return (x*TileW-TileW/2) - (ObjectSizeX(Map)/2-ObjectX(Map))
+End Function
+
+Function NodeYtoWorldY(y)
+	Return -((y*TileH-TileH/2) - (ObjectSizeY(Map)/2-ObjectY(Map)))
+End Function
+
+Function WorldXtoNodeX(x As Integer)
+	Return ((ObjectSizeX(Map)/2-ObjectX(Map)) + (x+TileW/2))/TileW
+End Function
+
+Function WorldYtoNodeY(y As Integer)
+	Return ((ObjectSizeY(Map)/2-ObjectY(Map)) - (y-TileH/2))/TileH
+End Function
+

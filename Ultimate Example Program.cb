@@ -1,0 +1,272 @@
+//cbAStar Ultimate Testing Program
+'Use this testing program if you want to test all of the features provided by cbAStar
+'However, if you want to see cbAStar in action in a real looking game, please see Tilemap Example Program.
+'Note! To use all of cbAStar's features with this example program, you need to modify the cbAStar.cb file
+'and set rules F, G and H to 1. You can also configure those rules more closely there.
+
+//Include cbAStrar in order to use its functions.
+Include "cbAStar.cb"
+
+//Configure window settings
+SCREEN 800,600
+ClsColor 128,128,128
+FrameLimit 40
+SetWindow "cbAStar Version "+CBASTAR_VERSION+" - Ultimate Testing Program"
+
+//Define constants to be used in this example program
+'The actual cbAStar library is NOT depended on these constants!
+Const NODE_MAP_WIDTH	= 20					'Map width will be 20 nodes And
+Const NODE_MAP_HEIGHT	= 13					' map height will be 13 nodes.
+Const NODE_WIDTH		= 40					'A node's width will be 40 pixels And
+Const NODE_HEIGHT		= 40					' height 40 pixels too.
+Const MAP_SAVE_FILE		= "Saved_Map.cbastar"	'A file where a created map will be saved (when pressing S) And loaded from (when pressing L).
+Const CHARACTER_SPEED	= 3						'Character's move speed in PPC (Pixels Per main loop Cycle)
+
+//Initialize cbAStar
+cbAStarInitialize(NODE_MAP_WIDTH,NODE_MAP_HEIGHT)
+
+//Set path following related variables
+start_x	= - 1
+start_y	= - 1
+end_x	= - 1
+end_y	= - 1
+
+//Now we are ready to start the main loop
+Repeat
+	//Keyboard And Mouse controls
+	update_path	= False
+	node_x		= MouseX()/NODE_WIDTH
+	node_y		= MouseY()/NODE_HEIGHT
+	If MouseHit(1) Then
+		'Place starting node
+		start_x = node_x
+		start_y = node_y
+		update_path = True
+	ElseIf MouseHit(2) Then
+		'Place ending node
+		end_x = node_x
+		end_y = node_y
+		update_path = True
+	ElseIf KeyHit(cbKeySpace) Then
+		'Place Or remove obstacle
+		x = node_x
+		y = node_y
+		CbAStarMap(x,y,1) = Not CbAStarMap(x,y,1)
+		update_path = True
+	EndIf
+	If CBASTAR_RULE_USE_SINGLE_NODE_PENALTY Then
+		If KeyHit(cbKeyAdd) Then
+			'Increase single node penalty
+			SetAStarPenalty(node_x,node_y, GetAstarPenalty(node_x,node_y) + 2)
+			update_path = True
+		ElseIf KeyHit(cbKeySubtract) Then
+			'Decrease single node penalty
+			SetAStarPenalty(node_x,node_y, GetAstarPenalty(node_x,node_y) - 2)
+			update_path = True
+		ElseIf KeyHit(cbKeyBackspace) Then
+			'Clear single node penalty
+			SetAStarPenalty(node_x,node_y, 0)
+			If CBASTAR_RULE_USE_NODE_DIRECTION_PENALTY Then
+				'Clear also single node penalty direction
+				'(clear the actual penalty value, Not the direction)
+				SetAStarPenalty(node_x,node_y, CBASTAR_DEFAULT,CBASTAR_DEFAULT, 0)
+			EndIf
+			update_path = True
+		EndIf
+	EndIf
+	If CBASTAR_RULE_USE_NODE_DIRECTION_PENALTY Then
+		'Set single node penalty direction
+		old_update_path = update_path
+		update_path = True
+		If KeyHit(cbKeyNum6) Then
+			SetAStarPenalty(node_x,node_y, CBASTAR_DEFAULT, 0)
+		ElseIf KeyHit(cbKeyNum9) Then
+			SetAStarPenalty(node_x,node_y, CBASTAR_DEFAULT, 1)
+		ElseIf KeyHit(cbKeyNum8) Then
+			SetAStarPenalty(node_x,node_y, CBASTAR_DEFAULT, 2)
+		ElseIf KeyHit(cbKeyNum7) Then
+			SetAStarPenalty(node_x,node_y, CBASTAR_DEFAULT, 3)
+		ElseIf KeyHit(cbKeyNum4) Then
+			SetAStarPenalty(node_x,node_y, CBASTAR_DEFAULT, 4)
+		ElseIf KeyHit(cbKeyNum1) Then
+			SetAStarPenalty(node_x,node_y, CBASTAR_DEFAULT, 5)
+		ElseIf KeyHit(cbKeyNum2) Then
+			SetAStarPenalty(node_x,node_y, CBASTAR_DEFAULT, 6)
+		ElseIf KeyHit(cbKeyNum3) Then
+			SetAStarPenalty(node_x,node_y, CBASTAR_DEFAULT, 7)
+		ElseIf KeyHit(cbKeyMultiply) Then
+			'Increase single penalty attached To a specific direction
+			SetAStarPenalty(node_x,node_y, CBASTAR_DEFAULT, CBASTAR_DEFAULT, GetAStarPenalty(node_x,node_y,2) + 2)
+		ElseIf KeyHit(cbKeyDivide) Then
+			'Decrease single penalty attached To a specific direction
+			SetAStarPenalty(node_x,node_y, CBASTAR_DEFAULT, CBASTAR_DEFAULT, GetAStarPenalty(node_x,node_y,2) - 2)
+		Else
+			update_path = old_update_path
+		EndIf
+	EndIf
+	
+	If KeyHit(cbKeyS) Then
+		'Save all obstacles And penalties To a file.
+		'Note! This does Not save the starting And ending node locations because SaveAStarMap() does Not save any
+		'information about already calculated paths!
+		SaveAStarMap(map_save_file)
+	ElseIf KeyHit(cbKeyL) Then
+		'Load all obstacles And penalties from a file.
+		LoadAStarMap(map_save_file,True)
+		update_path = True
+	EndIf
+	
+	//Calculate a path If requested by any above condition via update_path variable.
+	If (update_path = True) And start_x > -1 And start_y > -1 And end_x > -1 And end_y > -1 Then
+		If path > 0 Then DeleteMEMBlock path		'Delete old path If exists
+		start_timer			= Timer()
+		path				= CalculatePath(start_x,start_y, end_x,end_y)
+		calculation_time	= Timer()-start_timer	'Measure Time that the calculation will take
+		
+		//Place the character To the start of the path
+		character_x#		= start_x*NODE_WIDTH+NODE_WIDTH/2
+		character_y#		= start_y*NODE_HEIGHT+NODE_HEIGHT/2
+		
+		//Set character's target node coordinates To -1 To trigger path following code
+		character_node_x	= -1
+		character_node_y	= -1
+	EndIf
+
+	//Draw nice obstacles the starting point And the ending point
+	For x = 0 To NODE_MAP_WIDTH-1
+		For y = 0 To NODE_MAP_HEIGHT-1
+			
+			'Draw square
+			Color 0,0,0
+			If start_x	= x	And start_y	= y	Then Color 255,	255,	0
+			If end_x	= x	And end_y	= y	Then Color 0,	255,	0
+			If CbAStarMap(x,y,1)			Then Color 255,	0,		0
+			Box x*NODE_WIDTH,y*NODE_HEIGHT, NODE_WIDTH,NODE_HEIGHT
+			
+			'Draw grid
+			Color 255,255,255
+			Line x*NODE_WIDTH,	y*NODE_HEIGHT,	(x+1)*NODE_WIDTH,	y*NODE_HEIGHT
+			Line x*NODE_WIDTH,	y*NODE_HEIGHT,	x*NODE_WIDTH,		(y+1)*NODE_HEIGHT
+			
+			'Show single node penalty
+			If CBASTAR_RULE_USE_SINGLE_NODE_PENALTY Then
+				Color 255,255,255
+				If CbAStarMap(x,y,2) Then Text x*NODE_WIDTH,y*NODE_HEIGHT, "P"+CbAStarMap(x,y,2)
+			EndIf
+			
+			'Show direction based single node penalty
+			If CBASTAR_RULE_USE_NODE_DIRECTION_PENALTY Then
+				If CbAStarMap(x,y,4) <> 0 Then
+					Color 0,0,255
+					coordinate_change$	= DirectionToCoordinateChange(CbAStarMap(x,y,3))
+					x_change			= Int(GetWord(coordinate_change,1))
+					y_change			= Int(GetWord(coordinate_change,2))
+					Line x*NODE_WIDTH+NODE_WIDTH/2,y*NODE_HEIGHT+NODE_HEIGHT/2, x*NODE_WIDTH+NODE_WIDTH/2+x_change*NODE_WIDTH/2,y*NODE_HEIGHT+NODE_HEIGHT/2+y_change*NODE_HEIGHT/2
+					Color 0,0,128
+					Text x*NODE_WIDTH,y*NODE_HEIGHT+15, "DP"+CbAStarMap(x,y,4)
+				EndIf
+			EndIf
+		Next y
+	Next x
+	
+	//Draw path If it was calculate successfully
+	If path > 0 Then
+		old_x = -1
+		old_y = -1
+		Color 255,0,255
+		For i = 0 To MEMBlockSize(path)-4 Step 4
+			//Fetch node coordinates
+			node_x	= PeekShort(path,i)
+			node_y	= PeekShort(path,i+2)
+			
+			//Calculate node's drawing coordinates
+			draw_x	= node_x * NODE_WIDTH + NODE_WIDTH/2 - 2
+			draw_y	= node_y * NODE_HEIGHT + NODE_HEIGHT/2 - 2
+			If old_x=-1 Then old_x=draw_x : old_y = draw_y
+			
+			//Draw node
+			Box draw_x,draw_y, 4,4
+			Line old_x+2,old_y+2, draw_x+2,draw_y+2
+			old_x	= draw_x
+			old_y	= draw_y
+		Next i
+		Color 0,0,0
+		Text 0,ScreenHeight()-75, "Path calculation took "+calculation_time+" milliseconds"
+	ElseIf path = -1 Then
+		Color 0,0,0
+		Text 0,ScreenHeight()-75, "Path cannot be calculated"
+	EndIf
+	
+	//Show direction based single node penalty
+	If CBASTAR_RULE_USE_NODE_DIRECTION_PENALTY Then
+		For x = 0 To CbAStarMapWidth-1
+			For y = 0 To CbAStarMapHeight-1
+				If CbAStarMap(x,y,4) <> 0 Then
+					Color 0,0,50
+					coordinate_change$	= DirectionToCoordinateChange(CbAStarMap(x,y,3))
+					x_change			= Int(GetWord(coordinate_change,1))
+					y_change			= Int(GetWord(coordinate_change,2))
+					Line x*NODE_WIDTH+NODE_WIDTH/2,y*NODE_HEIGHT+NODE_HEIGHT/2, x*NODE_WIDTH+NODE_WIDTH/2+x_change*NODE_WIDTH/2,y*NODE_HEIGHT+NODE_HEIGHT/2+y_change*NODE_HEIGHT/2
+					Color 0,0,255
+					Text x*NODE_WIDTH,y*NODE_HEIGHT+15, "DP"+CbAStarMap(x,y,4)
+				EndIf
+			Next y
+		Next x
+	EndIf
+	
+	//Show moving character
+	If path > 0 Then
+		//If Next node is Not known, find it out
+		If (character_node_x = -1 Or character_node_y = -1)
+			If FollowPath(path) Then
+				//FollowPath() gave the Next node
+				character_node_x = FollowPathX
+				character_node_y = FollowPathY
+			Else
+				//The path does Not have anymore nodes, so restart the path.
+				ResetFollowPath(path)
+				character_x	= start_x*NODE_W+NODE_W/2
+				character_y	= start_y*NODE_H+NODE_H/2
+			EndIf
+		EndIf
+		
+		//If Next node is know so head For it
+		If (character_node_x > -1 And character_node_y > -1) Then
+			//Calculate target coordinates
+			character_target_x	= character_node_x*NODE_WIDTH+NODE_WIDTH/2
+			character_target_y	= character_node_y*NODE_HEIGHT+NODE_HEIGHT/2
+			
+			//Move the character
+			character_angle#	= GetAngle(character_x,character_y, character_target_x,character_target_y)
+			character_x#		= character_x + Cos(character_angle) * CHARACTER_SPEED
+			character_y#		= character_y - Sin(character_angle) * CHARACTER_SPEED
+			
+			//Check If the character is close enough To the target
+			If Distance(character_x,character_y, character_target_x,character_target_y) < CHARACTER_SPEED Then
+				'Reset target node coordinates To trigger the program To fetch New ones.
+				character_node_x = -1
+				character_node_y = -1
+			EndIf
+		EndIf
+		
+		//Draw the character
+		Color 0,255,255
+		Circle character_x-3,character_y-3, 6, True
+	EndIf
+	
+	//Show cursor location
+	Color 128,0,0
+	Box MouseX()/NODE_WIDTH*NODE_WIDTH,MouseY()/NODE_HEIGHT*NODE_HEIGHT, NODE_WIDTH+1,NODE_HEIGHT+1, OFF
+	
+	//Show instructions
+	Color 0,0,0
+	Text 0,ScreenHeight()-60, "Mouse1: Place Start   Mouse2: Place End   Space: Place/Remove Obstacle"
+	If CBASTAR_RULE_USE_SINGLE_NODE_PENALTY Then Text 0,ScreenHeight()-45, "Num+: Increase single node penalty (SNP)   Num-: Decrease single node penalty (SNP)"
+	If CBASTAR_RULE_USE_NODE_DIRECTION_PENALTY Then
+		Text 0, ScreenHeight()-30, "Numpad numbers: set single node penalty direction (SNPD)   Num*: Increase direction penalty in SNPD"
+		Text 0, ScreenHeight()-15, "Num/: Decrease direction penalty in SNPD   Backspace: Clear penalties from a node"
+	EndIf
+	
+	//Finally draw anything we have in this testing program
+	DrawScreen
+Forever
